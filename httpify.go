@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -16,16 +17,25 @@ type HttpRequest struct {
 	body       string
 }
 
-func ReadRequest(data []byte) (req *HttpRequest, err error) {
+func NewHttpRequest(method string, resource *url.URL, protoMajor int, protoMinor int, headers map[string]string, body string) *HttpRequest {
+	return &HttpRequest{
+		method:     method,
+		resource:   resource,
+		protoMajor: protoMajor,
+		protoMinor: protoMinor,
+		headers:    headers,
+		body:       body,
+	}
+}
+
+// TODO: more in depth errors
+func ReadHttpRequest(data []byte) (req *HttpRequest, err error) {
 	if len(data) == 0 {
 		return nil, errors.New("no data provided")
 	}
 	req_text := string(data)
 	lines := strings.Split(req_text, "\r\n")
-	first_line := strings.Split(lines[0], " ")
-	if len(first_line) != 3 {
-		return nil, errors.New("invalid request line")
-	}
+	first_line := strings.SplitN(lines[0], " ", 3)
 	method, raw_url, proto := first_line[0], first_line[1], first_line[2]
 	_, ok := HTTP_METHOD[method]
 	if !ok {
@@ -42,16 +52,12 @@ func ReadRequest(data []byte) (req *HttpRequest, err error) {
 		return nil, errors.New("only HTTP/1.1 parsing is supported")
 	}
 
-	headers := map[string]string {}
+	headers := map[string]string{}
 	var l int
 	for l = 1; lines[l] != ""; l++ {
-		header_parts := strings.Split(lines[l], ": ")
-		if len(header_parts) != 2 {
-			return nil, errors.New("failed to parse headers")
-		}
+		header_parts := strings.SplitN(lines[l], ": ", 2)
 		headers[header_parts[0]] = header_parts[1]
 	}
-
 	body := strings.Join(lines[l+1:], "\r\n")
 
 	return &HttpRequest{
@@ -59,38 +65,66 @@ func ReadRequest(data []byte) (req *HttpRequest, err error) {
 		resource:   resource,
 		protoMajor: protoMajor,
 		protoMinor: protoMinor,
-		headers: headers,
-		body: body,
+		headers:    headers,
+		body:       body,
 	}, nil
-
 }
 
 func (req *HttpRequest) Method() string {
 	return req.method
 }
 
+func (req *HttpRequest) SetMethod(method string) {
+	req.method = method
+}
+
 func (req *HttpRequest) Resource() *url.URL {
 	return req.resource
+}
+
+func (req *HttpRequest) SetResource(resource *url.URL) {
+	req.resource = resource
 }
 
 func (req *HttpRequest) ProtoMajor() int {
 	return req.protoMajor
 }
 
+func (req *HttpRequest) SetProtoMajor(protoMajor int) {
+	req.protoMajor = protoMajor
+}
+
 func (req *HttpRequest) ProtoMinor() int {
 	return req.protoMinor
+}
+
+func (req *HttpRequest) SetProtoMinor(protoMinor int) {
+	req.protoMinor = protoMinor
 }
 
 func (req *HttpRequest) Protocol() string {
 	return "HTTP/" + fmt.Sprint(req.protoMajor) + "." + fmt.Sprint(req.protoMinor)
 }
 
+func (req *HttpRequest) SetProtocol(protoMajor int, protoMinor int) {
+	req.protoMajor = protoMajor
+	req.protoMinor = protoMinor
+}
+
 func (req *HttpRequest) Headers() map[string]string {
 	return req.headers
 }
 
+func (req *HttpRequest) SetHeader(key string, value string) {
+	req.headers[key] = value
+}
+
 func (req *HttpRequest) Body() string {
 	return req.body
+}
+
+func (req *HttpRequest) SetBody(body string) {
+	req.body = body
 }
 
 type HttpResponse struct {
@@ -99,6 +133,108 @@ type HttpResponse struct {
 	statusCode int
 	headers    map[string]string
 	body       string
+}
+
+func NewHttpResponse(protoMajor int, protoMinor int, statusCode int, headers map[string]string, body string) *HttpResponse {
+	return &HttpResponse{
+		protoMajor: protoMajor,
+		protoMinor: protoMinor,
+		statusCode: statusCode,
+		headers:    headers,
+		body:       body,
+	}
+}
+
+func ReadHttpResponse(data []byte) (res *HttpResponse, err error) {
+	if len(data) == 0 {
+		return nil, errors.New("no data provided")
+	}
+	res_text := string(data)
+	lines := strings.Split(res_text, "\r\n")
+	first_line := strings.SplitN(lines[0], " ", 2)
+	var protoMajor, protoMinor int
+	if first_line[0] == "HTTP/1.1" {
+		protoMajor, protoMinor = 1, 1
+	} else {
+		return nil, errors.New("only HTTP/1.1 parsing is supported")
+	}
+	statusCode, err := strconv.Atoi(first_line[1][0:3])
+	if err != nil || HTTP_STATUS[statusCode] == "" {
+		return nil, errors.New("invalid status code")
+	}
+
+	headers := map[string]string{}
+	var l int
+	for l = 1; lines[l] != ""; l++ {
+		header_parts := strings.SplitN(lines[l], ": ", 2)
+		headers[header_parts[0]] = header_parts[1]
+	}
+	body := strings.Join(lines[l+1:], "\r\n")
+
+	return &HttpResponse{
+		protoMajor: protoMajor,
+		protoMinor: protoMinor,
+		statusCode: statusCode,
+		headers: headers,
+		body: body,
+	}, nil
+}
+
+func (req *HttpResponse) ProtoMajor() int {
+	return req.protoMajor
+}
+
+func (req *HttpResponse) SetProtoMajor(protoMajor int) {
+	req.protoMajor = protoMajor
+}
+
+func (req *HttpResponse) ProtoMinor() int {
+	return req.protoMinor
+}
+
+func (req *HttpResponse) SetProtoMinor(protoMinor int) {
+	req.protoMinor = protoMinor
+}
+
+func (req *HttpResponse) Protocol() string {
+	return "HTTP/" + fmt.Sprint(req.protoMajor) + "." + fmt.Sprint(req.protoMinor)
+}
+
+func (req *HttpResponse) SetProtocol(protoMajor int, protoMinor int) {
+	req.protoMajor = protoMajor
+	req.protoMinor = protoMinor
+}
+
+func (req *HttpResponse) StatusCode() int {
+	return req.statusCode
+}
+
+func (req *HttpResponse) SetStatusCode(statusCode int) {
+	req.statusCode = statusCode
+}
+
+func (req *HttpResponse) Status() string {
+	return HTTP_STATUS[req.statusCode]
+}
+
+func (req *HttpResponse) SetStatus(statusCode int) {
+	req.statusCode = statusCode
+}
+
+func (req *HttpResponse) Headers() map[string]string {
+	return req.headers
+}
+
+func (req *HttpResponse) SetHeader(key string, value string) {
+	req.headers[key] = value
+}
+
+func (req *HttpResponse) Body() string {
+	return req.body
+}
+
+func (req *HttpResponse) SetBody(body string) {
+	req.body = body
 }
 
 var HTTP_METHOD = map[string]string{
