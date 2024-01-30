@@ -1,20 +1,21 @@
 package httpify_test
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/Melidee/httpify"
 )
 
 func TestReadRequest(t *testing.T) {
-	req, err := httpify.ReadHttpRequest([]byte("GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n"))
+	req, err := httpify.ReadRequest([]byte("GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n"))
 	if err != nil {
 		t.Error(err)
 	}
 	if req.Method() != "GET" {
 		t.Error("invalid method")
 	}
-	if req.Resource().String() != "/" {
+	if req.Url().String() != "/" {
 		t.Error("invalid resource")
 	}
 	if req.ProtoMajor() != 1 || req.ProtoMinor() != 1 {
@@ -28,8 +29,16 @@ func TestReadRequest(t *testing.T) {
 	}
 }
 
+func TestRequestString(t *testing.T) {
+	url, _ := url.Parse("/")
+	req := httpify.NewRequest("GET", url, 1, 1, map[string]string{"Host": "localhost:8080"}, "Hello World!")
+	if req.String() != "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\nHello World!" {
+		t.Error("invalid string")
+	}
+}
+
 func TestReadResponse(t *testing.T) {
-	res, err := httpify.ReadHttpResponse([]byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"))
+	res, err := httpify.ReadResponse([]byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -47,5 +56,12 @@ func TestReadResponse(t *testing.T) {
 	}
 	if res.Body() != "" {
 		t.Error("invalid body")
+	}
+}
+
+func TestResponseString(t *testing.T) {
+	res := httpify.NewResponse(1, 1, 200, map[string]string{"Content-Length": "0"}, "Hello World!")
+	if res.String() != "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\nHello World!" {
+		t.Error("invalid string")
 	}
 }

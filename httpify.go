@@ -8,19 +8,19 @@ import (
 	"strings"
 )
 
-type HttpRequest struct {
+type Request struct {
 	method     string
-	resource   *url.URL
+	url        *url.URL
 	protoMajor int
 	protoMinor int
 	headers    map[string]string
 	body       string
 }
 
-func NewHttpRequest(method string, resource *url.URL, protoMajor int, protoMinor int, headers map[string]string, body string) *HttpRequest {
-	return &HttpRequest{
+func NewRequest(method string, url *url.URL, protoMajor int, protoMinor int, headers map[string]string, body string) *Request {
+	return &Request{
 		method:     method,
-		resource:   resource,
+		url:        url,
 		protoMajor: protoMajor,
 		protoMinor: protoMinor,
 		headers:    headers,
@@ -29,7 +29,7 @@ func NewHttpRequest(method string, resource *url.URL, protoMajor int, protoMinor
 }
 
 // TODO: more in depth errors
-func ReadHttpRequest(data []byte) (req *HttpRequest, err error) {
+func ReadRequest(data []byte) (req *Request, err error) {
 	if len(data) == 0 {
 		return nil, errors.New("no data provided")
 	}
@@ -41,7 +41,7 @@ func ReadHttpRequest(data []byte) (req *HttpRequest, err error) {
 	if !ok {
 		return nil, errors.New("invalid HTTP method")
 	}
-	resource, err := url.Parse(raw_url)
+	url, err := url.Parse(raw_url)
 	if err != nil {
 		return nil, errors.New("invalid url")
 	}
@@ -60,9 +60,9 @@ func ReadHttpRequest(data []byte) (req *HttpRequest, err error) {
 	}
 	body := strings.Join(lines[l+1:], "\r\n")
 
-	return &HttpRequest{
+	return &Request{
 		method:     method,
-		resource:   resource,
+		url:        url,
 		protoMajor: protoMajor,
 		protoMinor: protoMinor,
 		headers:    headers,
@@ -70,64 +70,88 @@ func ReadHttpRequest(data []byte) (req *HttpRequest, err error) {
 	}, nil
 }
 
-func (req *HttpRequest) Method() string {
+func (req *Request) String() string {
+	return req.Method() + " " + req.Url().String() + " " + req.Protocol() + "\r\n" + req.HeadersString() + "\r\n" + req.Body()
+}
+
+func (req *Request) Dump() []byte {
+	return []byte(req.String())
+}
+
+func (req *Request) Method() string {
 	return req.method
 }
 
-func (req *HttpRequest) SetMethod(method string) {
+func (req *Request) SetMethod(method string) {
 	req.method = method
 }
 
-func (req *HttpRequest) Resource() *url.URL {
-	return req.resource
+func (req *Request) Url() *url.URL {
+	return req.url
 }
 
-func (req *HttpRequest) SetResource(resource *url.URL) {
-	req.resource = resource
+func (req *Request) SetUrl(url *url.URL) {
+	req.url = url
 }
 
-func (req *HttpRequest) ProtoMajor() int {
+func (req *Request) Resource() *url.URL {
+	return req.url
+}
+
+func (req *Request) SetResource(resource string) {
+	req.url, _ = url.Parse(resource)
+}
+
+func (req *Request) ProtoMajor() int {
 	return req.protoMajor
 }
 
-func (req *HttpRequest) SetProtoMajor(protoMajor int) {
+func (req *Request) SetProtoMajor(protoMajor int) {
 	req.protoMajor = protoMajor
 }
 
-func (req *HttpRequest) ProtoMinor() int {
+func (req *Request) ProtoMinor() int {
 	return req.protoMinor
 }
 
-func (req *HttpRequest) SetProtoMinor(protoMinor int) {
+func (req *Request) SetProtoMinor(protoMinor int) {
 	req.protoMinor = protoMinor
 }
 
-func (req *HttpRequest) Protocol() string {
+func (req *Request) Protocol() string {
 	return "HTTP/" + fmt.Sprint(req.protoMajor) + "." + fmt.Sprint(req.protoMinor)
 }
 
-func (req *HttpRequest) SetProtocol(protoMajor int, protoMinor int) {
+func (req *Request) SetProtocol(protoMajor int, protoMinor int) {
 	req.protoMajor = protoMajor
 	req.protoMinor = protoMinor
 }
 
-func (req *HttpRequest) Headers() map[string]string {
+func (req *Request) Headers() map[string]string {
 	return req.headers
 }
 
-func (req *HttpRequest) SetHeader(key string, value string) {
+func (req *Request) SetHeader(key string, value string) {
 	req.headers[key] = value
 }
 
-func (req *HttpRequest) Body() string {
+func (req *Request) HeadersString() string {
+	headers := ""
+	for key, value := range req.headers {
+		headers += key + ": " + value + "\r\n"
+	}
+	return headers
+}
+
+func (req *Request) Body() string {
 	return req.body
 }
 
-func (req *HttpRequest) SetBody(body string) {
+func (req *Request) SetBody(body string) {
 	req.body = body
 }
 
-type HttpResponse struct {
+type Response struct {
 	protoMajor int
 	protoMinor int
 	statusCode int
@@ -135,8 +159,8 @@ type HttpResponse struct {
 	body       string
 }
 
-func NewHttpResponse(protoMajor int, protoMinor int, statusCode int, headers map[string]string, body string) *HttpResponse {
-	return &HttpResponse{
+func NewResponse(protoMajor int, protoMinor int, statusCode int, headers map[string]string, body string) *Response {
+	return &Response{
 		protoMajor: protoMajor,
 		protoMinor: protoMinor,
 		statusCode: statusCode,
@@ -145,7 +169,7 @@ func NewHttpResponse(protoMajor int, protoMinor int, statusCode int, headers map
 	}
 }
 
-func ReadHttpResponse(data []byte) (res *HttpResponse, err error) {
+func ReadResponse(data []byte) (res *Response, err error) {
 	if len(data) == 0 {
 		return nil, errors.New("no data provided")
 	}
@@ -171,69 +195,81 @@ func ReadHttpResponse(data []byte) (res *HttpResponse, err error) {
 	}
 	body := strings.Join(lines[l+1:], "\r\n")
 
-	return &HttpResponse{
+	return &Response{
 		protoMajor: protoMajor,
 		protoMinor: protoMinor,
 		statusCode: statusCode,
-		headers: headers,
-		body: body,
+		headers:    headers,
+		body:       body,
 	}, nil
 }
 
-func (req *HttpResponse) ProtoMajor() int {
+func (req *Response) String() string {
+	return req.Protocol() + " " + req.Status() + "\r\n" + req.HeadersString() + "\r\n" + req.Body()
+}
+
+func (req *Response) ProtoMajor() int {
 	return req.protoMajor
 }
 
-func (req *HttpResponse) SetProtoMajor(protoMajor int) {
+func (req *Response) SetProtoMajor(protoMajor int) {
 	req.protoMajor = protoMajor
 }
 
-func (req *HttpResponse) ProtoMinor() int {
+func (req *Response) ProtoMinor() int {
 	return req.protoMinor
 }
 
-func (req *HttpResponse) SetProtoMinor(protoMinor int) {
+func (req *Response) SetProtoMinor(protoMinor int) {
 	req.protoMinor = protoMinor
 }
 
-func (req *HttpResponse) Protocol() string {
+func (req *Response) Protocol() string {
 	return "HTTP/" + fmt.Sprint(req.protoMajor) + "." + fmt.Sprint(req.protoMinor)
 }
 
-func (req *HttpResponse) SetProtocol(protoMajor int, protoMinor int) {
+func (req *Response) SetProtocol(protoMajor int, protoMinor int) {
 	req.protoMajor = protoMajor
 	req.protoMinor = protoMinor
 }
 
-func (req *HttpResponse) StatusCode() int {
+func (req *Response) StatusCode() int {
 	return req.statusCode
 }
 
-func (req *HttpResponse) SetStatusCode(statusCode int) {
+func (req *Response) SetStatusCode(statusCode int) {
 	req.statusCode = statusCode
 }
 
-func (req *HttpResponse) Status() string {
+func (req *Response) Status() string {
 	return HTTP_STATUS[req.statusCode]
 }
 
-func (req *HttpResponse) SetStatus(statusCode int) {
+func (req *Response) SetStatus(statusCode int) {
 	req.statusCode = statusCode
 }
 
-func (req *HttpResponse) Headers() map[string]string {
+func (req *Response) Headers() map[string]string {
 	return req.headers
 }
 
-func (req *HttpResponse) SetHeader(key string, value string) {
+func (req *Response) SetHeader(key string, value string) {
 	req.headers[key] = value
 }
 
-func (req *HttpResponse) Body() string {
+func (req *Response) HeadersString() string {
+	headers := ""
+	for key, value := range req.headers {
+		headers += key + ": " + value + "\r\n"
+	}
+	return headers
+}
+
+func (req *Response) Body() string {
 	return req.body
 }
 
-func (req *HttpResponse) SetBody(body string) {
+func (req *Response) SetBody(body string) {
 	req.body = body
 }
 
