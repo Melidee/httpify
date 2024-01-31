@@ -74,7 +74,7 @@ func (req *Request) String() string {
 	return req.Method() + " " + req.Url().String() + " " + req.Protocol() + "\r\n" + req.HeadersString() + "\r\n" + req.Body()
 }
 
-func (req *Request) Dump() []byte {
+func (req *Request) Bytes() []byte {
 	return []byte(req.String())
 }
 
@@ -206,6 +206,10 @@ func ReadResponse(data []byte) (res *Response, err error) {
 
 func (req *Response) String() string {
 	return req.Protocol() + " " + req.Status() + "\r\n" + req.HeadersString() + "\r\n" + req.Body()
+}
+
+func (req *Response) Bytes() []byte {
+	return []byte(req.String())
 }
 
 func (req *Response) ProtoMajor() int {
